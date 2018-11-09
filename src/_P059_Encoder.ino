@@ -1,3 +1,4 @@
+#ifdef USES_P059
 //#######################################################################################################
 //#################################### Plugin 059: Rotary Encoder #######################################
 //#######################################################################################################
@@ -7,22 +8,21 @@
 
 // Connection:
 // Use 1st and 2nd GPIO for encoders A and B signal.
-// Optional use 3rd GPIO for encoders I signel to reset counter to 0 at first trigger.
+// Optional use 3rd GPIO for encoders I signal to reset counter to 0 at first trigger.
 // If counter runs in wrong direction, change A and B GPIOs in settings page
 
-// Note: Up to 4 encoders can be used simultaniously
+// Note: Up to 4 encoders can be used simultaneously
 
 
-#ifdef PLUGIN_BUILD_TESTING
 
 #define PLUGIN_059
 #define PLUGIN_ID_059         59
-#define PLUGIN_NAME_059       "Switch Input - Rotary Encoder [TESTING]"
+#define PLUGIN_NAME_059       "Switch Input - Rotary Encoder"
 #define PLUGIN_VALUENAME1_059 "Counter"
 
 #include <QEIx4.h>
 
-QEIx4* Plugin_059_QE = NULL;
+std::map<unsigned int, std::shared_ptr<QEIx4> > P_059_sensordefs;
 
 #ifndef CONFIG
 #define CONFIG(n) (Settings.TaskDevicePluginConfig[event->TaskIndex][n])
@@ -70,6 +70,14 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
         break;
       }
 
+    case PLUGIN_GET_DEVICEGPIONAMES:
+      {
+        event->String1 = F("GPIO &larr; A");
+        event->String2 = F("GPIO &larr; B");
+        event->String3 = F("GPIO &#8672; I (optional)");
+        break;
+      }
+
     case PLUGIN_WEBFORM_LOAD:
       {
         // default values
@@ -78,10 +86,10 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
 
         String options[3] = { F("1 pulse per cycle"), F("2 pulses per cycle"), F("4 pulses per cycle") };
         int optionValues[3] = { 1, 2, 4 };
-        addFormSelector(string, F("Mode"), F("qei_mode"), 3, options, optionValues, CONFIG(0));
+        addFormSelector(F("Mode"), F("qei_mode"), 3, options, optionValues, CONFIG(0));
 
-        addFormNumericBox(string, F("Limit min."), F("qei_limitmin"), CONFIG_L(0));
-        addFormNumericBox(string, F("Limit max."), F("qei_limitmax"), CONFIG_L(1));
+        addFormNumericBox(F("Limit min."), F("qei_limitmin"), CONFIG_L(0));
+        addFormNumericBox(F("Limit max."), F("qei_limitmax"), CONFIG_L(1));
 
         success = true;
         break;
@@ -100,12 +108,13 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_INIT:
       {
-        if (!Plugin_059_QE)
-          Plugin_059_QE = new QEIx4;
+        // create sensor instance and add to std::map
+        P_059_sensordefs.erase(event->TaskIndex);
+        P_059_sensordefs[event->TaskIndex] = std::shared_ptr<QEIx4>(new QEIx4);
 
-        Plugin_059_QE->begin(PIN(0),PIN(1),PIN(2),CONFIG(0));
-        Plugin_059_QE->setLimit(CONFIG_L(0), CONFIG_L(1));
-        Plugin_059_QE->setIndexTrigger(true);
+        P_059_sensordefs[event->TaskIndex]->begin(PIN(0),PIN(1),PIN(2),CONFIG(0));
+        P_059_sensordefs[event->TaskIndex]->setLimit(CONFIG_L(0), CONFIG_L(1));
+        P_059_sensordefs[event->TaskIndex]->setIndexTrigger(true);
 
         ExtraTaskSettings.TaskDeviceValueDecimals[event->BaseVarIndex] = 0;
 
@@ -119,7 +128,7 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
             setPinState(PLUGIN_ID_059, pin, PIN_MODE_INPUT, 0);
           }
           log += pin;
-          log += F(" ");
+          log += ' ';
         }
         addLog(LOG_LEVEL_INFO, log);
 
@@ -127,13 +136,19 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
         break;
       }
 
+    case PLUGIN_EXIT:
+      {
+        P_059_sensordefs.erase(event->TaskIndex);
+        break;
+      }
+
     case PLUGIN_TEN_PER_SECOND:
       {
-        if (Plugin_059_QE)
+        if (P_059_sensordefs.count(event->TaskIndex) != 0)
         {
-          if (Plugin_059_QE->hasChanged())
+          if (P_059_sensordefs[event->TaskIndex]->hasChanged())
           {
-            long c = Plugin_059_QE->read();
+            long c = P_059_sensordefs[event->TaskIndex]->read();
             UserVar[event->BaseVarIndex] = (float)c;
             event->sensorType = SENSOR_TYPE_SWITCH;
 
@@ -151,16 +166,34 @@ boolean Plugin_059(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_READ:
       {
-        if (Plugin_059_QE)
+        if (P_059_sensordefs.count(event->TaskIndex) != 0)
         {
-          UserVar[event->BaseVarIndex] = (float)Plugin_059_QE->read();
+          UserVar[event->BaseVarIndex] = (float)P_059_sensordefs[event->TaskIndex]->read();
         }
         success = true;
         break;
       }
 
+    case PLUGIN_WRITE:
+      {
+        if (P_059_sensordefs.count(event->TaskIndex) != 0)
+        {
+            String log = "";
+            String command = parseString(string, 1);
+            if (command == F("encwrite"))
+            {
+              if (event->Par1 >= 0)
+              {
+                log = String(F("QEI  : ")) + string;
+                addLog(LOG_LEVEL_INFO, log);
+                P_059_sensordefs[event->TaskIndex]->write(event->Par1);
+              }
+              success = true; // Command is handled.
+            }
+        }
+        break;
+      }
   }
   return success;
 }
-
-#endif
+#endif // USES_P059

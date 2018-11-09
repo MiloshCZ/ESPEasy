@@ -1,3 +1,4 @@
+#ifdef USES_P057
 //#######################################################################################################
 //#################################### Plugin 057: HT16K33 LED ##########################################
 //#######################################################################################################
@@ -10,6 +11,7 @@
 // (2) MX,<param>,<param>,<param>, ...    with hexadecimal values
 // (3) MNUM,<param>,<param>,<param>, ...    with decimal values for 7-segment displays
 // (4) MPRINT,<text>    with decimal values for 7-segment displays
+// (5) MBR,<0-15>    set display brightness, between 0 and 15
 
 // List of M* params:
 // (a) <value>
@@ -43,11 +45,10 @@
 // Note: The HT16K33-LED-plugin and the HT16K33-key-plugin can be used at the same time with the same I2C address
 
 
-#ifdef PLUGIN_BUILD_TESTING
 
 #define PLUGIN_057
 #define PLUGIN_ID_057         57
-#define PLUGIN_NAME_057       "LED - HT16K33 [TESTING]"
+#define PLUGIN_NAME_057       "Display - HT16K33 [TESTING]"
 
 #include <HT16K33.h>
 
@@ -69,7 +70,7 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
         Device[++deviceCount].Number = PLUGIN_ID_057;
         Device[deviceCount].Type = DEVICE_TYPE_I2C;
         Device[deviceCount].Ports = 0;
-        Device[deviceCount].VType = SENSOR_TYPE_SWITCH;
+        Device[deviceCount].VType = SENSOR_TYPE_NONE;
         Device[deviceCount].PullUpOption = false;
         Device[deviceCount].InverseLogicOption = false;
         Device[deviceCount].FormulaOption = false;
@@ -92,23 +93,23 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
         byte addr = CONFIG(0);
 
         int optionValues[8] = { 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77 };
-        addFormSelectorI2C(string, F("i2c_addr"), 8, optionValues, addr);
+        addFormSelectorI2C(F("i2c_addr"), 8, optionValues, addr);
 
 
-        addFormSubHeader(string, F("7-Seg. Clock"));
+        addFormSubHeader(F("7-Seg. Clock"));
 
         int16_t choice = CONFIG(1);
         String options[2] = { F("none"), F("7-Seg. HH:MM") };
-        addFormSelector(string, F("Clock Type"), F("clocktype"), 2, options, NULL, choice);
+        addFormSelector(F("Clock Type"), F("clocktype"), 2, options, NULL, choice);
 
-        addFormNumericBox(string, F("Seg. for <b>X</b>x:xx"), F("clocksegh10"), CONFIG(2), 0, 7);
-        addFormNumericBox(string, F("Seg. for x<b>X</b>:xx"), F("clocksegh1"), CONFIG(3), 0, 7);
-        addFormNumericBox(string, F("Seg. for xx:<b>X</b>x"), F("clocksegm10"), CONFIG(4), 0, 7);
-        addFormNumericBox(string, F("Seg. for xx:x<b>X</b>"), F("clocksegm1"), CONFIG(5), 0, 7);
+        addFormNumericBox(F("Seg. for <b>X</b>x:xx"), F("clocksegh10"), CONFIG(2), 0, 7);
+        addFormNumericBox(F("Seg. for x<b>X</b>:xx"), F("clocksegh1"), CONFIG(3), 0, 7);
+        addFormNumericBox(F("Seg. for xx:<b>X</b>x"), F("clocksegm10"), CONFIG(4), 0, 7);
+        addFormNumericBox(F("Seg. for xx:x<b>X</b>"), F("clocksegm1"), CONFIG(5), 0, 7);
 
-        addFormNumericBox(string, F("Seg. for Colon"), F("clocksegcol"), CONFIG(6), -1, 7);
-        string += F(" Value ");
-        addNumericBox(string, F("clocksegcolval"), CONFIG(7), 0, 255);
+        addFormNumericBox(F("Seg. for Colon"), F("clocksegcol"), CONFIG(6), -1, 7);
+        addHtml(F(" Value "));
+        addNumericBox(F("clocksegcolval"), CONFIG(7), 0, 255);
 
         success = true;
         break;
@@ -149,27 +150,35 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
         if (!Plugin_057_M)
           return false;
 
-        string.toLowerCase();
         String command = parseString(string, 1);
 
         if (command == F("mprint"))
         {
-          int paramPos = getParamStartPos(string, 2);
-          String text = string.substring(paramPos);
-          byte seg = 0;
+          String text = parseStringToEnd(string, 2);
+          if (text.length() > 0) {
+            byte seg = 0;
 
-          Plugin_057_M->ClearRowBuffer();
-          while (text[seg] && seg < 8)
-          {
-            uint16_t value = 0;
-            char c = text[seg];
-            Plugin_057_M->SetDigit(seg, c);
-            seg++;
+            Plugin_057_M->ClearRowBuffer();
+            while (text[seg] && seg < 8)
+            {
+              // uint16_t value = 0;
+              char c = text[seg];
+              Plugin_057_M->SetDigit(seg, c);
+              seg++;
+            }
+            Plugin_057_M->TransmitRowBuffer();
+            success = true;
           }
-          Plugin_057_M->TransmitRowBuffer();
+        }
+        else if (command == F("mbr")) {
+          String param = parseString(string, 2);
+          int brightness;
+          if (validIntFromString(param, brightness)) {
+            if (brightness >= 0 && brightness <= 255)
+              Plugin_057_M->SetBrightness(brightness);
+          }
           success = true;
         }
-
         else if (command == F("m") || command == F("mx") || command == F("mnum"))
         {
           String param;
@@ -179,11 +188,13 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
           uint8_t seg = 0;
           uint16_t value = 0;
 
-          string.replace("  ", " ");
-          string.replace(" =", "=");
-          string.replace("= ", "=");
+          String lowerString=string;
+          lowerString.toLowerCase();
+          lowerString.replace(F("  "), " ");
+          lowerString.replace(F(" ="), "=");
+          lowerString.replace(F("= "), "=");
 
-          param = parseString(string, paramIdx++);
+          param = parseString(lowerString, paramIdx++);
           if (param.length())
           {
             while (param.length())
@@ -192,13 +203,15 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
 
               if (param == F("log"))
               {
-                String log = F("MX   : ");
-                for (byte i = 0; i < 8; i++)
-                {
-                  log += String(Plugin_057_M->GetRow(i), 16);
-                  log += F("h, ");
+                if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+                  String log = F("MX   : ");
+                  for (byte i = 0; i < 8; i++)
+                  {
+                    log += String(Plugin_057_M->GetRow(i), 16);
+                    log += F("h, ");
+                  }
+                  addLog(LOG_LEVEL_INFO, log);
                 }
-                addLog(LOG_LEVEL_INFO, log);
                 success = true;
               }
 
@@ -253,7 +266,7 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
                 seg++;
               }
 
-              param = parseString(string, paramIdx++);
+              param = parseString(lowerString, paramIdx++);
             }
           }
           else
@@ -316,4 +329,4 @@ boolean Plugin_057(byte function, struct EventStruct *event, String& string)
   return success;
 }
 
-#endif
+#endif // USES_P057

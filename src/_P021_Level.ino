@@ -1,10 +1,11 @@
+#ifdef USES_P021
 //#######################################################################################################
 //#################################### Plugin 021: Level Control ########################################
 //#######################################################################################################
 
 #define PLUGIN_021
 #define PLUGIN_ID_021        21
-#define PLUGIN_NAME_021       "Level Control"
+#define PLUGIN_NAME_021       "Regulator - Level Control"
 #define PLUGIN_VALUENAME1_021 "Output"
 
 boolean Plugin_021(byte function, struct EventStruct *event, String& string)
@@ -29,7 +30,7 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
         Device[deviceCount].TimerOption = false;
         break;
       }
-      
+
     case PLUGIN_GET_DEVICENAME:
       {
         string = F(PLUGIN_NAME_021);
@@ -41,21 +42,21 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
         strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[0], PSTR(PLUGIN_VALUENAME1_021));
         break;
       }
-      
+
     case PLUGIN_WEBFORM_LOAD:
       {
-        char tmpString[128];
+        // char tmpString[128];
 
-        string += F("<TR><TD>Check Task:<TD>");
-        addTaskSelect(string, "plugin_021_task", Settings.TaskDevicePluginConfig[event->TaskIndex][0]);
+        addHtml(F("<TR><TD>Check Task:<TD>"));
+        addTaskSelect(F("p021_task"), Settings.TaskDevicePluginConfig[event->TaskIndex][0]);
 
         LoadTaskSettings(Settings.TaskDevicePluginConfig[event->TaskIndex][0]); // we need to load the values from another task for selection!
-        string += F("<TR><TD>Check Value:<TD>");
-        addTaskValueSelect(string, "plugin_021_value", Settings.TaskDevicePluginConfig[event->TaskIndex][1], Settings.TaskDevicePluginConfig[event->TaskIndex][0]);
+        addHtml(F("<TR><TD>Check Value:<TD>"));
+        addTaskValueSelect(F("p021_value"), Settings.TaskDevicePluginConfig[event->TaskIndex][1], Settings.TaskDevicePluginConfig[event->TaskIndex][0]);
 
-      	addFormTextBox(string, F("Set Value"), F("plugin_021_setvalue"), String(Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0]), 8);
+      	addFormTextBox(F("Set Level"), F("p021_setvalue"), String(Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0]), 8);
 
-      	addFormTextBox(string, F("Hysteresis"), F("plugin_021_hyst"), String(Settings.TaskDevicePluginConfigFloat[event->TaskIndex][1]), 8);
+      	addFormTextBox(F("Hysteresis"), F("p021_hyst"), String(Settings.TaskDevicePluginConfigFloat[event->TaskIndex][1]), 8);
 
         LoadTaskSettings(event->TaskIndex); // we need to restore our original taskvalues!
         success = true;
@@ -64,25 +65,35 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
       {
-        Settings.TaskDevicePluginConfig[event->TaskIndex][0] = getFormItemInt(F("plugin_021_task"));
-        Settings.TaskDevicePluginConfig[event->TaskIndex][1] = getFormItemInt(F("plugin_021_value"));
-        Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0] = getFormItemFloat(F("plugin_021_setvalue"));
-        Settings.TaskDevicePluginConfigFloat[event->TaskIndex][1] = getFormItemFloat(F("plugin_021_hyst"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][0] = getFormItemInt(F("p021_task"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][1] = getFormItemInt(F("p021_value"));
+        Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0] = getFormItemFloat(F("p021_setvalue"));
+        Settings.TaskDevicePluginConfigFloat[event->TaskIndex][1] = getFormItemFloat(F("p021_hyst"));
         success = true;
         break;
       }
 
-    case PLUGIN_REMOTE_CONFIG:
+    case PLUGIN_SET_CONFIG:
       {
-        Serial.print("levelplugin: ");
-        Serial.println(string);
         String command = parseString(string, 1);
         if (command == F("setlevel"))
         {
           String value = parseString(string, 2);
-          Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0] = value.toFloat();
-          Serial.println(value);
+          float result=0;
+          Calculate(value.c_str(), &result);
+          Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0] = result;
           SaveSettings();
+          success = true;
+        }
+        break;
+      }
+
+    case PLUGIN_GET_CONFIG:
+      {
+        String command = parseString(string, 1);
+        if (command == F("getlevel"))
+        {
+          string = Settings.TaskDevicePluginConfigFloat[event->TaskIndex][0];
           success = true;
         }
         break;
@@ -90,8 +101,6 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_INIT:
       {
-        Serial.print(F("INIT : Output "));
-        Serial.println(Settings.TaskDevicePin1[event->TaskIndex]);
         pinMode(Settings.TaskDevicePin1[event->TaskIndex], OUTPUT);
         success = true;
         break;
@@ -113,8 +122,9 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
           state = 0;
         if (state != switchstate[event->TaskIndex])
         {
-          Serial.print(F("Out : State "));
-          Serial.println(state);
+          String log = F("LEVEL: State ");
+          log += state;
+          addLog(LOG_LEVEL_INFO, log);
           switchstate[event->TaskIndex] = state;
           digitalWrite(Settings.TaskDevicePin1[event->TaskIndex],state);
           UserVar[event->BaseVarIndex] = state;
@@ -128,4 +138,4 @@ boolean Plugin_021(byte function, struct EventStruct *event, String& string)
   }
   return success;
 }
-
+#endif // USES_P021

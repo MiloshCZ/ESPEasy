@@ -1,3 +1,4 @@
+#ifdef USES_P007
 //#######################################################################################################
 //#################################### Plugin 007: ExtWiredAnalog #######################################
 //#######################################################################################################
@@ -11,7 +12,7 @@ boolean Plugin_007(byte function, struct EventStruct *event, String& string)
 {
   boolean success = false;
 
-  static byte portValue = 0;
+  // static byte portValue = 0;
 
   switch (function)
   {
@@ -69,4 +70,4 @@ boolean Plugin_007(byte function, struct EventStruct *event, String& string)
   }
   return success;
 }
-
+#endif // USES_P007

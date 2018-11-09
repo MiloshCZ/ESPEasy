@@ -23,7 +23,7 @@ import os
 TOTAL_IRAM = 32786;
 TOTAL_DRAM = 81920;
 
-env="dev_4096"
+env="dev_ESP8266_4096"
 
 sections = OrderedDict([
     ("data", "Initialized Data (RAM)"),
@@ -136,15 +136,15 @@ try:
 
     #which plugins to test?
     if len(sys.argv)>2:
-        test_plugins=sys.argv[2:]
+        plugins=sys.argv[2:]
     else:
-        test_plugins=plugins
-    test_plugins.sort()
+        plugins=plugins
+    plugins.sort()
 
     print("Analysing ESPEasy memory usage for env {} ...\n".format(env))
 
     #### disable all plugins and to get base size
-    for plugin in test_plugins:
+    for plugin in plugins:
         disable_plugin(plugin)
 
 
@@ -185,8 +185,8 @@ try:
     # results={}
     # for lib in libs:
     #     enable_lib(lib)
-    #     subprocess.check_call("platformio run --silent --environment dev_4096", shell=True)
-    #     results[lib]=analyse_memory(".pioenvs/dev_4096/firmware.elf")
+    #     subprocess.check_call("platformio run --silent --environment dev_ESP8266_4096", shell=True)
+    #     results[lib]=analyse_memory(".pioenvs/dev_ESP8266_4096/firmware.elf")
     #     disable_lib(lib)
     #
     #     print(output_format.format(
@@ -204,7 +204,7 @@ try:
 
     ##### test per plugin
     results={}
-    for plugin in test_plugins:
+    for plugin in plugins:
         enable_plugin(plugin)
         subprocess.check_call("platformio run --silent --environment "+env, shell=True)
         results[plugin]=analyse_memory(".pioenvs/"+env+"/firmware.elf")
@@ -222,7 +222,7 @@ try:
 
 
     ##### test with all test_plugins at once
-    for plugin in test_plugins:
+    for plugin in plugins:
         enable_plugin(plugin)
 
     subprocess.check_call("platformio run --silent --environment "+env, shell=True)

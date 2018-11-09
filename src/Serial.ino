@@ -11,7 +11,7 @@ void serial()
 {
   while (Serial.available())
   {
-    yield();
+    delay(0);
     SerialInByte = Serial.read();
     if (SerialInByte == 255) // binary data...
     {
@@ -25,20 +25,22 @@ void serial()
         InputBuffer_Serial[SerialInByteCounter++] = SerialInByte;
     }
 
-    if (SerialInByte == '\n')
+    if (SerialInByte == '\r' || SerialInByte == '\n')
     {
+      if (SerialInByteCounter == 0)   //empty command?
+        break;
       InputBuffer_Serial[SerialInByteCounter] = 0; // serial data completed
       Serial.write('>');
       Serial.println(InputBuffer_Serial);
       String action = InputBuffer_Serial;
       struct EventStruct TempEvent;
+      action=parseTemplate(action,action.length());  //@giig1967g: parseTemplate before executing the command bug#1977
       parseCommandString(&TempEvent, action);
       TempEvent.Source = VALUE_SOURCE_SERIAL;
       if (!PluginCall(PLUGIN_WRITE, &TempEvent, action))
-        ExecuteCommand(VALUE_SOURCE_SERIAL, InputBuffer_Serial);
+        ExecuteCommand(VALUE_SOURCE_SERIAL, action.c_str());
       SerialInByteCounter = 0;
       InputBuffer_Serial[0] = 0; // serial data processed, clear buffer
     }
   }
 }
-

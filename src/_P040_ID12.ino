@@ -1,10 +1,11 @@
+#ifdef USES_P040
 //#######################################################################################################
 //#################################### Plugin 040: Serial RFID ID-12 ####################################
 //#######################################################################################################
 
 #define PLUGIN_040
 #define PLUGIN_ID_040         40
-#define PLUGIN_NAME_040       "RFID Reader - ID12LA/RDM6300"
+#define PLUGIN_NAME_040       "RFID - ID12LA/RDM6300"
 #define PLUGIN_VALUENAME1_040 "Tag"
 
 boolean Plugin_040_init = false;
@@ -83,7 +84,7 @@ boolean Plugin_040(byte function, struct EventStruct *event, String& string)
                 }
 
                 // Every two hex-digits, add byte to code:
-                if (bytesread & 1 == 1) {
+                if ( (bytesread & 1) == 1) {
                   // make some space for this hex-digit by
                   // shifting the previous hex-digit with 4 bits to the left:
                   code[bytesread >> 1] = (val | (tempbyte << 4));
@@ -133,4 +134,4 @@ boolean Plugin_040(byte function, struct EventStruct *event, String& string)
   }
   return success;
 }
-
+#endif // USES_P040

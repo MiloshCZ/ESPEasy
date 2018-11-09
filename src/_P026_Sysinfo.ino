@@ -1,10 +1,11 @@
+#ifdef USES_P026
 //#######################################################################################################
 //#################################### Plugin 026: System Info ##########################################
 //#######################################################################################################
 
 #define PLUGIN_026
 #define PLUGIN_ID_026         26
-#define PLUGIN_NAME_026       "System Info"
+#define PLUGIN_NAME_026       "Generic - System Info"
 #define PLUGIN_VALUENAME1_026 ""
 
 boolean Plugin_026(byte function, struct EventStruct *event, String& string)
@@ -17,8 +18,8 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
     case PLUGIN_DEVICE_ADD:
       {
         Device[++deviceCount].Number = PLUGIN_ID_026;
-        Device[deviceCount].VType = SENSOR_TYPE_SINGLE;
-        Device[deviceCount].ValueCount = 1;
+        Device[deviceCount].VType = SENSOR_TYPE_QUAD;
+        Device[deviceCount].ValueCount = 4;
         Device[deviceCount].SendDataOption = true;
         Device[deviceCount].TimerOption = true;
         Device[deviceCount].FormulaOption = true;
@@ -34,13 +35,16 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
     case PLUGIN_GET_DEVICEVALUENAMES:
       {
         strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[0], PSTR(PLUGIN_VALUENAME1_026));
+        strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[1], PSTR(PLUGIN_VALUENAME1_026));
+        strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[2], PSTR(PLUGIN_VALUENAME1_026));
+        strcpy_P(ExtraTaskSettings.TaskDeviceValueNames[3], PSTR(PLUGIN_VALUENAME1_026));
         break;
       }
 
     case PLUGIN_WEBFORM_LOAD:
       {
-        byte choice = Settings.TaskDevicePluginConfig[event->TaskIndex][0];
-        String options[9];
+        byte choice;
+        String options[12];
         options[0] = F("Uptime");
         options[1] = F("Free RAM");
         options[2] = F("Wifi RSSI");
@@ -50,7 +54,18 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
         options[6] = F("IP 2.Octet");
         options[7] = F("IP 3.Octet");
         options[8] = F("IP 4.Octet");
-        addFormSelector(string, F("Indicator"), F("plugin_026"), 9, options, NULL, choice);
+        options[9] = F("Web activity");
+        options[10] = F("Free Stack");
+        options[11] = F("None");
+
+        choice = Settings.TaskDevicePluginConfig[event->TaskIndex][0];
+        addFormSelector(F("Indicator"), F("p026a"), 12, options, NULL, choice);
+        choice = Settings.TaskDevicePluginConfig[event->TaskIndex][1];
+        addFormSelector(F("Indicator"), F("p026b"), 12, options, NULL, choice);
+        choice = Settings.TaskDevicePluginConfig[event->TaskIndex][2];
+        addFormSelector(F("Indicator"), F("p026c"), 12, options, NULL, choice);
+        choice = Settings.TaskDevicePluginConfig[event->TaskIndex][3];
+        addFormSelector(F("Indicator"), F("p026d"), 12, options, NULL, choice);
 
         success = true;
         break;
@@ -58,15 +73,42 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SAVE:
       {
-        Settings.TaskDevicePluginConfig[event->TaskIndex][0] = getFormItemInt(F("plugin_026"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][0] = getFormItemInt(F("p026a"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][1] = getFormItemInt(F("p026b"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][2] = getFormItemInt(F("p026c"));
+        Settings.TaskDevicePluginConfig[event->TaskIndex][3] = getFormItemInt(F("p026d"));
         success = true;
         break;
       }
 
     case PLUGIN_READ:
       {
-        float value = 0;
-        switch(Settings.TaskDevicePluginConfig[event->TaskIndex][0])
+        UserVar[event->BaseVarIndex] = P026_get_value(Settings.TaskDevicePluginConfig[event->TaskIndex][0]);
+        UserVar[event->BaseVarIndex+1] = P026_get_value(Settings.TaskDevicePluginConfig[event->TaskIndex][1]);
+        UserVar[event->BaseVarIndex+2] = P026_get_value(Settings.TaskDevicePluginConfig[event->TaskIndex][2]);
+        UserVar[event->BaseVarIndex+3] = P026_get_value(Settings.TaskDevicePluginConfig[event->TaskIndex][3]);
+        if (loglevelActiveFor(LOG_LEVEL_INFO)){
+          String log = F("SYS  : ");
+          log += UserVar[event->BaseVarIndex];
+          log +=',';
+          log += UserVar[event->BaseVarIndex+1];
+          log +=',';
+          log += UserVar[event->BaseVarIndex+2];
+          log +=',';
+          log += UserVar[event->BaseVarIndex+3];
+          addLog(LOG_LEVEL_INFO,log);
+        }
+        success = true;
+        break;
+      }
+  }
+  return success;
+}
+
+float P026_get_value(int type)
+{
+  float value = 0;
+          switch(type)
         {
           case 0:
           {
@@ -94,7 +136,7 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
           }
           case 4:
           {
-            value = (100 - (100 * loopCounterLast / loopCounterMax));
+            value = getCPUload();
             break;
           }
           case 5:
@@ -117,14 +159,18 @@ boolean Plugin_026(byte function, struct EventStruct *event, String& string)
             value = WiFi.localIP()[3];
             break;
           }
+          case 9:
+          {
+            value = (millis()-lastWeb)/1000; // respond in seconds
+            break;
+          }
+          case 10:
+          {
+            value = getCurrentFreeStack();
+            break;
+          }
         }
-        UserVar[event->BaseVarIndex] = value;
-        String log = F("SYS  : ");
-        log += value;
-        addLog(LOG_LEVEL_INFO,log);
-        success = true;
-        break;
-      }
-  }
-  return success;
+ return value;
 }
+
+#endif // USES_P026

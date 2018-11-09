@@ -1,30 +1,35 @@
 /********************************************************************************************\
-* Initialize specific hardware setings (only global ones, others are set through devices)
+* Initialize specific hardware settings (only global ones, others are set through devices)
 \*********************************************************************************************/
 
 void hardwareInit()
 {
-
   // set GPIO pins state if not set to default
-  for (byte x=0; x < 17; x++)
-    if (Settings.PinBootStates[x] != 0)
-      switch(Settings.PinBootStates[x])
+  for (byte gpio = 0; gpio < 17; ++gpio) {
+    bool serialPinConflict = (Settings.UseSerial && (gpio == 1 || gpio == 3));
+    if (!serialPinConflict && Settings.PinBootStates[gpio] != 0) {
+      switch(Settings.PinBootStates[gpio])
       {
         case 1:
-          pinMode(x,OUTPUT);
-          digitalWrite(x,LOW);
-          setPinState(1, x, PIN_MODE_OUTPUT, LOW);
+          pinMode(gpio,OUTPUT);
+          digitalWrite(gpio,LOW);
+          setPinState(1, gpio, PIN_MODE_OUTPUT, LOW);
           break;
         case 2:
-          pinMode(x,OUTPUT);
-          digitalWrite(x,HIGH);
-          setPinState(1, x, PIN_MODE_OUTPUT, HIGH);
+          pinMode(gpio,OUTPUT);
+          digitalWrite(gpio,HIGH);
+          setPinState(1, gpio, PIN_MODE_OUTPUT, HIGH);
           break;
         case 3:
-          pinMode(x,INPUT_PULLUP);
-          setPinState(1, x, PIN_MODE_INPUT, 0);
+          pinMode(gpio,INPUT_PULLUP);
+          setPinState(1, gpio, PIN_MODE_INPUT, 0);
           break;
       }
+    }
+  }
+
+  if (Settings.Pin_Reset != -1)
+    pinMode(Settings.Pin_Reset,INPUT_PULLUP);
 
   // configure hardware pins according to eeprom settings.
   if (Settings.Pin_i2c_sda != -1)
@@ -37,7 +42,9 @@ void hardwareInit()
         String log = F("INIT : I2C custom clockstretchlimit:");
         log += Settings.WireClockStretchLimit;
         addLog(LOG_LEVEL_INFO, log);
-        Wire.setClockStretchLimit(Settings.WireClockStretchLimit);
+        #if defined(ESP8266)
+          Wire.setClockStretchLimit(Settings.WireClockStretchLimit);
+        #endif
       }
   }
 
@@ -49,7 +56,7 @@ void hardwareInit()
     Wire.write(0x83);             // command to set pointer
     Wire.write(17);               // pointer value to status byte
     Wire.endTransmission();
-   
+
     Wire.requestFrom(Settings.WDI2CAddress, (uint8_t)1);
     if (Wire.available())
     {
@@ -62,7 +69,7 @@ void hardwareInit()
       }
     }
   }
-  
+
   // SPI Init
   if (Settings.InitSPI)
   {
@@ -77,7 +84,8 @@ void hardwareInit()
     addLog(LOG_LEVEL_INFO, log);
   }
 
-  if (Settings.Pin_sd_cs > 0)
+#ifdef FEATURE_SD
+  if (Settings.Pin_sd_cs >= 0)
   {
     if (SD.begin(Settings.Pin_sd_cs))
     {
@@ -90,6 +98,30 @@ void hardwareInit()
       addLog(LOG_LEVEL_ERROR, log);
     }
   }
+#endif
 
 }
 
+void checkResetFactoryPin(){
+  static byte factoryResetCounter=0;
+  if (Settings.Pin_Reset == -1)
+    return;
+
+  if (digitalRead(Settings.Pin_Reset) == 0){ // active low reset pin
+    factoryResetCounter++; // just count every second
+  }
+  else
+  { // reset pin released
+    if (factoryResetCounter > 9) // factory reset and reboot
+      ResetFactory();
+    if (factoryResetCounter > 3) // normal reboot
+    #if defined(ESP8266)
+      ESP.reset();
+    #endif
+    #if defined(ESP32)
+      ESP.restart();
+    #endif
+
+    factoryResetCounter = 0; // count was < 3, reset counter
+  }
+}
